@@ -2,9 +2,10 @@ package hazm
 
 import (
 	"bufio"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 )
@@ -14,54 +15,54 @@ type WordInfo struct {
 	Tags      []string
 }
 
-func defaultDataDir() string {
-	candidates := []string{
-		"data",
-		"../hazm/data",
-		"../../hazm/data",
-	}
+const (
+	embeddedWordsRel         = "data/words.dat"
+	embeddedVerbsRel         = "data/verbs.dat"
+	embeddedAbbreviationsRel = "data/abbreviations.dat"
+)
 
-	if _, file, _, ok := runtime.Caller(0); ok {
-		base := filepath.Dir(file)
-		candidates = append(candidates,
-			filepath.Join(base, "..", "..", "hazm", "data"),
-			filepath.Join(base, "..", "data"),
-		)
-	}
-
-	for _, candidate := range candidates {
-		if _, err := os.Stat(candidate); err == nil {
-			return candidate
-		}
-	}
-	return "data"
-}
-
+// DefaultWordsPath returns the path used for embedded defaults (see openDataFile).
 func DefaultWordsPath() string {
-	return filepath.Join(defaultDataDir(), "words.dat")
+	return embeddedWordsRel
 }
 
 func DefaultVerbsPath() string {
-	return filepath.Join(defaultDataDir(), "verbs.dat")
+	return embeddedVerbsRel
 }
 
 func DefaultAbbreviationsPath() string {
-	return filepath.Join(defaultDataDir(), "abbreviations.dat")
+	return embeddedAbbreviationsRel
+}
+
+// openDataFile opens path for reading. If path is empty, it uses embedRel inside embeddedData.
+// If path is non-empty: absolute paths and paths that exist on disk are read from the filesystem;
+// otherwise the path is opened from the embedded FS.
+func openDataFile(path, embedRel string) (io.ReadCloser, error) {
+	if path == "" {
+		return embeddedData.Open(embedRel)
+	}
+	if filepath.IsAbs(path) {
+		return os.Open(path)
+	}
+	if _, err := os.Stat(path); err == nil {
+		return os.Open(path)
+	}
+	f, err := embeddedData.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open data %q: %w", path, err)
+	}
+	return f, nil
 }
 
 func LoadWords(path string) (map[string]WordInfo, error) {
-	if path == "" {
-		path = DefaultWordsPath()
-	}
-
-	file, err := os.Open(path)
+	rc, err := openDataFile(path, embeddedWordsRel)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer rc.Close()
 
 	words := make(map[string]WordInfo)
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(rc)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -93,18 +94,14 @@ func LoadWords(path string) (map[string]WordInfo, error) {
 }
 
 func LoadVerbs(path string) ([]string, error) {
-	if path == "" {
-		path = DefaultVerbsPath()
-	}
-
-	file, err := os.Open(path)
+	rc, err := openDataFile(path, embeddedVerbsRel)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer rc.Close()
 
 	verbs := make([]string, 0, 700)
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(rc)
 	for scanner.Scan() {
 		verb := strings.TrimSpace(scanner.Text())
 		if verb == "" {
@@ -121,14 +118,14 @@ func LoadVerbs(path string) ([]string, error) {
 }
 
 func LoadLines(path string) ([]string, error) {
-	file, err := os.Open(path)
+	rc, err := openDataFile(path, embeddedAbbreviationsRel)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer rc.Close()
 
 	result := []string{}
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(rc)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {

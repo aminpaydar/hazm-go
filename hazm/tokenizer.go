@@ -50,13 +50,6 @@ func NewWordTokenizer(opts TokenizerOptions) (*WordTokenizer, error) {
 	if opts == (TokenizerOptions{}) {
 		opts = DefaultTokenizerOptions()
 	}
-	if opts.WordsFile == "" {
-		opts.WordsFile = DefaultWordsPath()
-	}
-	if opts.VerbsFile == "" {
-		opts.VerbsFile = DefaultVerbsPath()
-	}
-
 	words, err := LoadWords(opts.WordsFile)
 	if err != nil {
 		return nil, err
@@ -115,7 +108,7 @@ func NewWordTokenizer(opts TokenizerOptions) (*WordTokenizer, error) {
 	}
 
 	if opts.JoinAbbreviations {
-		lines, err := LoadLines(DefaultAbbreviationsPath())
+		lines, err := LoadLines("")
 		if err != nil {
 			return nil, err
 		}
